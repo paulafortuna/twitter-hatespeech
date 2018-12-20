@@ -22,7 +22,7 @@ def hashtag(text):
     if hashtag_body.isupper():
         result = u"<hashtag> {} <allcaps>".format(hashtag_body)
     else:
-        result = " ".join(["<hashtag>"] + re.split(ur"(?=[A-Z])", hashtag_body, flags=FLAGS))
+        result = " ".join(["<hashtag>"] + re.split(u"([A-Z])", hashtag_body, flags=FLAGS))
     return result
 
 def allcaps(text):
@@ -64,4 +64,4 @@ if __name__ == '__main__':
     if text == "test":
         text = u"I TEST alllll kinds of #hashtags and #HASHTAGS, @mentions and 3000 (http://t.co/dkfjkdf). w/ <3 :) haha!!!!!"
     tokens = tokenize(text)
-    print tokens
+    print(tokens)
