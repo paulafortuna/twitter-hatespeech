@@ -44,8 +44,8 @@ word_embed_size = 200
 GLOVE_MODEL_FILE = str(sys.argv[1])
 EMBEDDING_DIM = int(sys.argv[2])
 MODEL_TYPE=sys.argv[3]
-print 'Embedding Dimension: %d' %(EMBEDDING_DIM)
-print 'GloVe Embedding: %s' %(GLOVE_MODEL_FILE)
+print('Embedding Dimension: %d' %(EMBEDDING_DIM))
+print('GloVe Embedding: %s' %(GLOVE_MODEL_FILE))
 
 word2vec_model1 = np.load('fast_text.npy')
 word2vec_model1 = word2vec_model1.reshape((word2vec_model1.shape[1], word2vec_model1.shape[2]))
@@ -53,7 +53,7 @@ f_vocab = open('vocab_fast_text', 'r')
 vocab = json.load(f_vocab)
 word2vec_model = {}
 for k,v in vocab.iteritems():
-word2vec_model[k] = word2vec_model1[int(v)]
+    word2vec_model[k] = word2vec_model1[int(v)]
 del word2vec_model1
 
 
@@ -82,7 +82,7 @@ def select_tweets_whose_embedding_exists():
                 _emb+=1
         if _emb:   # Not a blank tweet
             tweet_return.append(tweet)
-    print 'Tweets selected:', len(tweet_return)
+    print('Tweets selected:', len(tweet_return))
     #pdb.set_trace()
     return tweet_return
 
@@ -113,7 +113,7 @@ def gen_data():
     
 def get_model(m_type=None):
     if not m_type:
-        print 'ERROR: Please provide a valid method name'
+        print('ERROR: Please provide a valid method name')
         return None
 
     if m_type == 'logistic':
@@ -128,7 +128,7 @@ def get_model(m_type=None):
     elif m_type == "svm_linear":
         logreg = LinearSVC(class_weight="balanced")
     else:
-        print "ERROR: Please specify a correst model"
+        print("ERROR: Please specify a correst model")
         return None
 
     return logreg
@@ -137,17 +137,17 @@ def get_model(m_type=None):
 def classification_model(X, Y, model_type="logistic"):
     NO_OF_FOLDS=10
     X, Y = shuffle(X, Y, random_state=SEED)
-    print "Model Type:", model_type
+    print("Model Type:", model_type)
 
     #predictions = cross_val_predict(logreg, X, Y, cv=NO_OF_FOLDS)
     scores1 = cross_val_score(get_model(model_type), X, Y, cv=NO_OF_FOLDS, scoring='precision_weighted')
-    print "Precision(avg): %0.3f (+/- %0.3f)" % (scores1.mean(), scores1.std() * 2)
+    print("Precision(avg): %0.3f (+/- %0.3f)" % (scores1.mean(), scores1.std() * 2))
 
     scores2 = cross_val_score(get_model(model_type), X, Y, cv=NO_OF_FOLDS, scoring='recall_weighted')
-    print "Recall(avg): %0.3f (+/- %0.3f)" % (scores2.mean(), scores2.std() * 2)
+    print("Recall(avg): %0.3f (+/- %0.3f)" % (scores2.mean(), scores2.std() * 2))
     
     scores3 = cross_val_score(get_model(model_type), X, Y, cv=NO_OF_FOLDS, scoring='f1_weighted')
-    print "F1-score(avg): %0.3f (+/- %0.3f)" % (scores3.mean(), scores3.std() * 2)
+    print("F1-score(avg): %0.3f (+/- %0.3f)" % (scores3.mean(), scores3.std() * 2))
 
     pdb.set_trace()
 

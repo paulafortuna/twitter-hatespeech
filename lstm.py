@@ -278,6 +278,7 @@ def main_LSTM():
     LOSS_FUN = "categorical_crossentropy"
     OPTIMIZER = "adam"
     tokenizer_name = "glove"
+    SEED = 42
     INITIALIZE_WEIGHTS_WITH = "random"
     EPOCHS = 10
     BATCH_SIZE = 512
@@ -308,6 +309,6 @@ def main_LSTM():
     model = lstm_model(data.shape[1], EMBEDDING_DIM, False, LOSS_FUN, OPTIMIZER)
     train_LSTM(data, y, model, EMBEDDING_DIM, W, EPOCHS, BATCH_SIZE, NO_OF_FOLDS, tokenizer_name)
     #model = lstm_model(data.shape[1], 25, get_embedding_weights())
-    #train_LSTM(data, y, model, EMBEDDING_DIM, W)
+    #train_LSTM(data, y, model, EMBEDDING_DIM , W)
 
     pdb.set_trace()
