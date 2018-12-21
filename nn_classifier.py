@@ -41,20 +41,20 @@ print('Found %s texts. (samples)' % len(texts))
 # logistic, gradient_boosting, random_forest, svm, tfidf_svm_linear, tfidf_svm_rbf
 model_count = 2
 word_embed_size = 200
-GLOVE_MODEL_FILE = str(sys.argv[1])
-EMBEDDING_DIM = int(sys.argv[2])
-MODEL_TYPE=sys.argv[3]
+GLOVE_MODEL_FILE = "glove.twitter.27B.25d.txt" #str(sys.argv[1])
+EMBEDDING_DIM = 25 #int(sys.argv[2])
+#MODEL_TYPE=sys.argv[3]
 print('Embedding Dimension: %d' %(EMBEDDING_DIM))
 print('GloVe Embedding: %s' %(GLOVE_MODEL_FILE))
 
-word2vec_model1 = np.load('fast_text.npy')
-word2vec_model1 = word2vec_model1.reshape((word2vec_model1.shape[1], word2vec_model1.shape[2]))
-f_vocab = open('vocab_fast_text', 'r')
-vocab = json.load(f_vocab)
-word2vec_model = {}
-for k,v in vocab.iteritems():
-    word2vec_model[k] = word2vec_model1[int(v)]
-del word2vec_model1
+#word2vec_model1 = np.load('fast_text.npy')
+#word2vec_model1 = word2vec_model1.reshape((word2vec_model1.shape[1], word2vec_model1.shape[2]))
+#f_vocab = open('vocab_fast_text', 'r')
+#vocab = json.load(f_vocab)
+#word2vec_model = {}
+#for k,v in vocab.items():
+#    word2vec_model[k] = word2vec_model1[int(v)]
+#del word2vec_model1
 
 
 SEED=42
@@ -66,6 +66,8 @@ VALIDATION_SPLIT = 0.2
 vocab, reverse_vocab = {}, {}
 freq = defaultdict(int)
 tweets = {}
+
+word2vec_model = gensim.models.KeyedVectors.load_word2vec_format(GLOVE_MODEL_FILE)
 
 
 def select_tweets_whose_embedding_exists():
@@ -87,7 +89,7 @@ def select_tweets_whose_embedding_exists():
     return tweet_return
 
 
-def gen_data():
+def gen_data(tweets):
     y_map = {
             'none': 0,
             'racism': 1,
@@ -152,13 +154,12 @@ def classification_model(X, Y, model_type="logistic"):
     pdb.set_trace()
 
 
-
-if __name__ == "__main__":
+def main_nn(MODEL_TYPE):
 
     #filter_vocab(20000)
 
     tweets = select_tweets_whose_embedding_exists()
-    X, Y = gen_data()
+    X, Y = gen_data(tweets)
 
     classification_model(X, Y, MODEL_TYPE)
     pdb.set_trace()
