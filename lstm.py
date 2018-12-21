@@ -3,7 +3,7 @@ import argparse
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers import Embedding, Input, LSTM
 from keras.models import Sequential, Model
-from keras.layers import Activation, Dense, Dropout, Embedding, Flatten, Input, Merge, Convolution1D, MaxPooling1D, GlobalMaxPooling1D
+from keras.layers import Activation, Dense, Dropout, Embedding, Flatten, Input, Convolution1D, MaxPooling1D, GlobalMaxPooling1D
 import numpy as np
 import pdb
 from sklearn.metrics import make_scorer, f1_score, accuracy_score, recall_score, precision_score, classification_report, precision_recall_fscore_support
@@ -52,32 +52,32 @@ EPOCHS = 10
 BATCH_SIZE = 512
 SCALE_LOSS_FUN = None
 
-word2vec_model = None
+# word2vec_model = None
 
 
 
-def get_embedding(word):
+def get_embedding(word, word2vec_model):
     #return
     try:
         return word2vec_model[word]
-    except Exception, e:
-        print 'Encoding not found: %s' %(word)
+    except Exception :
+        print('Encoding not found: %s' %(word))
         return np.zeros(EMBEDDING_DIM)
 
-def get_embedding_weights():
-    embedding = np.zeros((len(vocab) + 1, EMBEDDING_DIM))
+def get_embedding_weights(embedding_dim, word2vec_model):
+    embedding = np.zeros((len(vocab) + 1, embedding_dim))
     n = 0
-    for k, v in vocab.iteritems():
+    for k, v in vocab.items():
         try:
             embedding[v] = word2vec_model[k]
         except:
             n += 1
             pass
-    print "%d embedding missed"%n
+    print("%d embedding missed"%n)
     return embedding
 
 
-def select_tweets():
+def select_tweets(tokenizer, word2vec_model):
     # selects the tweets as in mean_glove_embedding method
     # Processing
     tweets = get_data()
@@ -85,23 +85,23 @@ def select_tweets():
     tweet_return = []
     for tweet in tweets:
         _emb = 0
-        words = TOKENIZER(tweet['text'].lower())
+        words = tokenizer(tweet['text'].lower())
         for w in words:
             if w in word2vec_model:  # Check if embeeding there in GLove model
                 _emb+=1
         if _emb:   # Not a blank tweet
             tweet_return.append(tweet)
-    print 'Tweets selected:', len(tweet_return)
+    print('Tweets selected:', len(tweet_return))
     #pdb.set_trace()
     return tweet_return
 
 
-def gen_vocab():
+def gen_vocab(tokenizer, tweets):
     # Processing
     vocab_index = 1
     for tweet in tweets:
-        text = TOKENIZER(tweet['text'].lower())
-        text = ''.join([c for c in text if c not in punctuation])
+        text = tokenizer(tweet['text'].lower())
+        text = ' '.join([c for c in text if c not in punctuation])
         words = text.split()
         words = [word for word in words if word not in STOPWORDS]
 
@@ -124,7 +124,7 @@ def filter_vocab(k):
     vocab['UNK'] = len(vocab) + 1
 
 
-def gen_sequence():
+def gen_sequence(tokenizer, tweets):
     y_map = {
             'none': 0,
             'racism': 1,
@@ -133,8 +133,8 @@ def gen_sequence():
 
     X, y = [], []
     for tweet in tweets:
-        text = TOKENIZER(tweet['text'].lower())
-        text = ''.join([c for c in text if c not in punctuation])
+        text = tokenizer(tweet['text'].lower())
+        text = ' '.join([c for c in text if c not in punctuation])
         words = text.split()
         words = [word for word in words if word not in STOPWORDS]
         seq, _emb = [], []
@@ -150,7 +150,7 @@ def shuffle_weights(model):
     weights = [np.random.permutation(w.flat).reshape(w.shape) for w in weights]
     model.set_weights(weights)
 
-def lstm_model(sequence_length, embedding_dim):
+def lstm_model(sequence_length, embedding_dim, LEARN_EMBEDDINGS, LOSS_FUN, OPTIMIZER):
     model_variation = 'LSTM'
     print('Model variation is %s' % model_variation)
     model = Sequential()
@@ -161,29 +161,29 @@ def lstm_model(sequence_length, embedding_dim):
     model.add(Dense(3))
     model.add(Activation('softmax'))
     model.compile(loss=LOSS_FUN, optimizer=OPTIMIZER, metrics=['accuracy'])
-    print model.summary()
+    print(model.summary())
     return model
 
 
-def train_LSTM(X, y, model, inp_dim, weights, epochs=EPOCHS, batch_size=BATCH_SIZE):
-    cv_object = KFold(n_splits=NO_OF_FOLDS, shuffle=True, random_state=42)
-    print cv_object
+def train_LSTM(X, y, model, inp_dim, weights, epochs=EPOCHS, batch_size=BATCH_SIZE, folds=NO_OF_FOLDS, initialize_weights_with="glove"):
+    cv_object = KFold(n_splits=folds, shuffle=True, random_state=42)
+    print(cv_object)
     p, r, f1 = 0., 0., 0.
     p1, r1, f11 = 0., 0., 0.
     sentence_len = X.shape[1]
     for train_index, test_index in cv_object.split(X):
-        if INITIALIZE_WEIGHTS_WITH == "glove":
+        if initialize_weights_with == "glove":
             model.layers[0].set_weights([weights])
-        elif INITIALIZE_WEIGHTS_WITH == "random":
+        elif initialize_weights_with == "random":
             shuffle_weights(model)
         else:
-            print "ERROR!"
+            print("ERROR!")
             return
         X_train, y_train = X[train_index], y[train_index]
         X_test, y_test = X[test_index], y[test_index]
         y_train = y_train.reshape((len(y_train), 1))
         X_temp = np.hstack((X_train, y_train))
-        for epoch in xrange(epochs):
+        for epoch in range(epochs):
             for X_batch in batch_gen(X_temp, batch_size):
                 x = X_batch[:, :sentence_len]
                 y_temp = X_batch[:, sentence_len]
@@ -196,19 +196,19 @@ def train_LSTM(X, y, model, inp_dim, weights, epochs=EPOCHS, batch_size=BATCH_SI
                     class_weights[2] = np.where(y_temp == 2)[0].shape[0]/float(len(y_temp))
 
                 try:
-                    y_temp = np_utils.to_categorical(y_temp, nb_classes=3)
+                    y_temp = np_utils.to_categorical(y_temp, num_classes=3)
                 except Exception as e:
-                    print e
-                    print y_temp
-                print x.shape, y.shape
+                    print(e)
+                    print(y_temp)
+                print(x.shape, y.shape)
                 loss, acc = model.train_on_batch(x, y_temp, class_weight=class_weights)
-                print loss, acc
+                print(loss, acc)
 
         y_pred = model.predict_on_batch(X_test)
         y_pred = np.argmax(y_pred, axis=1)
-        print classification_report(y_test, y_pred)
-        print precision_recall_fscore_support(y_test, y_pred)
-        print y_pred
+        print(classification_report(y_test, y_pred))
+        print(precision_recall_fscore_support(y_test, y_pred))
+        print(y_pred)
         p += precision_score(y_test, y_pred, average='weighted')
         p1 += precision_score(y_test, y_pred, average='micro')
         r += recall_score(y_test, y_pred, average='weighted')
@@ -217,18 +217,19 @@ def train_LSTM(X, y, model, inp_dim, weights, epochs=EPOCHS, batch_size=BATCH_SI
         f11 += f1_score(y_test, y_pred, average='micro')
 
 
-    print "macro results are"
-    print "average precision is %f" %(p/NO_OF_FOLDS)
-    print "average recall is %f" %(r/NO_OF_FOLDS)
-    print "average f1 is %f" %(f1/NO_OF_FOLDS)
+    print("macro results are")
+    print("average precision is %f" %(p/folds))
+    print("average recall is %f" %(r/folds))
+    print("average f1 is %f" %(f1/folds))
 
-    print "micro results are"
-    print "average precision is %f" %(p1/NO_OF_FOLDS)
-    print "average recall is %f" %(r1/NO_OF_FOLDS)
-    print "average f1 is %f" %(f11/NO_OF_FOLDS)
+    print("micro results are")
+    print("average precision is %f" %(p1/folds))
+    print("average recall is %f" %(r1/folds))
+    print("average f1 is %f" %(f11/folds))
 
 
-if __name__ == "__main__":
+def main_LSTM():
+    """
     parser = argparse.ArgumentParser(description='LSTM based models for twitter Hate speech detection')
     parser.add_argument('-f', '--embeddingfile', required=True)
     parser.add_argument('-d', '--dimension', required=True)
@@ -264,31 +265,45 @@ if __name__ == "__main__":
     EPOCHS = int(args.epochs)
     BATCH_SIZE = int(args.batch_size)
     SCALE_LOSS_FUN = args.scale_loss_function
+    """
 
+
+
+    GLOVE_MODEL_FILE = "glove.twitter.27B.25d.txt"
+    EMBEDDING_DIM = int(25)
+    LOSS_FUN = "categorical_crossentropy"
+    OPTIMIZER = "adam"
+    tokenizer_name = "glove"
+    INITIALIZE_WEIGHTS_WITH = "random"
+    EPOCHS = 10
+    BATCH_SIZE = 512
+    NO_OF_FOLDS = 10
+    tokenizer = glove_tokenize
 
 
     np.random.seed(SEED)
-    print 'GLOVE embedding: %s' %(GLOVE_MODEL_FILE)
-    print 'Embedding Dimension: %d' %(EMBEDDING_DIM)
-    print 'Allowing embedding learning: %s' %(str(LEARN_EMBEDDINGS))
+    print('GLOVE embedding: %s' %(GLOVE_MODEL_FILE))
+    print('Embedding Dimension: %d' %(EMBEDDING_DIM))
+    print('Allowing embedding learning: %s' %(str(LEARN_EMBEDDINGS)))
 
-    word2vec_model = gensim.models.Word2Vec.load_word2vec_format(GLOVE_MODEL_FILE)
+    word2vec_model = gensim.models.KeyedVectors.load_word2vec_format(GLOVE_MODEL_FILE)
 
-    tweets = select_tweets()
-    gen_vocab()
+    tweets = select_tweets(tokenizer, word2vec_model)
+    gen_vocab(tokenizer, tweets)
     #filter_vocab(20000)
-    X, y = gen_sequence()
+    X, y = gen_sequence(tokenizer, tweets)
     #Y = y.reshape((len(y), 1))
     MAX_SEQUENCE_LENGTH = max(map(lambda x:len(x), X))
-    print "max seq length is %d"%(MAX_SEQUENCE_LENGTH)
+    print("max seq length is %d"%(MAX_SEQUENCE_LENGTH))
 
     data = pad_sequences(X, maxlen=MAX_SEQUENCE_LENGTH)
     y = np.array(y)
     data, y = sklearn.utils.shuffle(data, y)
-    W = get_embedding_weights()
+    W = get_embedding_weights(EMBEDDING_DIM, word2vec_model)
 
-    model = lstm_model(data.shape[1], EMBEDDING_DIM)
+    model = lstm_model(data.shape[1], EMBEDDING_DIM, False, LOSS_FUN, OPTIMIZER)
+    train_LSTM(data, y, model, EMBEDDING_DIM, W, EPOCHS, BATCH_SIZE, NO_OF_FOLDS, tokenizer_name)
     #model = lstm_model(data.shape[1], 25, get_embedding_weights())
-    train_LSTM(data, y, model, EMBEDDING_DIM, W)
+    #train_LSTM(data, y, model, EMBEDDING_DIM, W)
 
     pdb.set_trace()
