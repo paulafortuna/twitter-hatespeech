@@ -3,7 +3,7 @@ from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers import Embedding, Input, LSTM
 from keras.models import Sequential, Model
-from keras.layers import Activation, Dense, Dropout, Embedding, Flatten, Input, Merge, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, GlobalAveragePooling1D
+from keras.layers import Activation, Dense, Dropout, Embedding, Flatten, Input, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, GlobalAveragePooling1D
 import numpy as np
 from preprocess_twitter import tokenize as tokenizer_g
 import pdb
@@ -20,6 +20,8 @@ from collections import defaultdict
 from batch_gen import batch_gen
 from string import punctuation
 from get_similar_words import get_similar_words
+from my_tokenizer import glove_tokenize
+from nltk import tokenize as tokenize_nltk
 import sys
 
 ### Preparing the text data
@@ -31,13 +33,6 @@ label_map = {
         'racism': 1,
         'sexism': 2
     }
-tweet_data = get_data()
-for tweet in tweet_data:
-    texts.append(tweet['text'])
-    labels.append(label_map[tweet['label']])
-print('Found %s texts. (samples)' % len(texts))
-
-EMBEDDING_DIM = int(sys.argv[1])
 np.random.seed(42)
 # Load the orginal glove file
 # SHASHANK files
@@ -45,22 +40,20 @@ np.random.seed(42)
 
 
 # PINKESH files
-GLOVE_MODEL_FILE="/home/pinkesh/DATASETS/glove-twitter/GENSIM.glove.twitter.27B." + str(EMBEDDING_DIM) + "d.txt"
+#GLOVE_MODEL_FILE="/home/pinkesh/DATASETS/glove-twitter/GENSIM.glove.twitter.27B." + str(EMBEDDING_DIM) + "d.txt"
 NO_OF_CLASSES=3
 
 MAX_NB_WORDS = None
 VALIDATION_SPLIT = 0.2
-word2vec_model = gensim.models.Word2Vec.load_word2vec_format(GLOVE_MODEL_FILE)
-
 
 # vocab generation
-MyTokenizer = tokenize.casual.TweetTokenizer(strip_handles=True, reduce_len=True)
+#MyTokenizer = tokenize.casual.TweetTokenizer(strip_handles=True, reduce_len=True)
 vocab, reverse_vocab = {}, {}
 freq = defaultdict(int)
 tweets = {}
 
 
-def get_embedding(word):
+def get_embedding(word, word2vec_model, EMBEDDING_DIM):
     #return
     try:
         return word2vec_model[word]
@@ -68,21 +61,22 @@ def get_embedding(word):
         print('Encoding not found: %s' %(word))
         return np.zeros(EMBEDDING_DIM)
 
-def get_embedding_weights():
+
+def get_embedding_weights(EMBEDDING_DIM, word2vec_model):
     embedding = np.zeros((len(vocab) + 1, EMBEDDING_DIM))
     n = 0
-    for k, v in vocab.iteritems():
-    	try:
-    		embedding[v] = word2vec_model[k]
-    	except:
-    		n += 1
-    		pass
+    for k, v in vocab.items():
+        try:
+            embedding[v] = word2vec_model[k]
+        except:
+            n += 1
+            pass
     print("%d embedding missed"%n)
     #pdb.set_trace()
     return embedding
 
 
-def select_tweets():
+def select_tweets(TOKENIZER,word2vec_model):
     # selects the tweets as in mean_glove_embedding method
     # Processing
     tweets = get_data()
@@ -90,23 +84,22 @@ def select_tweets():
     tweet_return = []
     for tweet in tweets:
         _emb = 0
-        words = Tokenize(tweet['text']).split()
+        words = TOKENIZER(tweet['text'].lower())
         for w in words:
             if w in word2vec_model:  # Check if embeeding there in GLove model
                 _emb+=1
         if _emb:   # Not a blank tweet
             tweet_return.append(tweet)
     print('Tweets selected:', len(tweet_return))
-    #pdb.set_trace()
     return tweet_return
 
 
-def gen_vocab():
+def gen_vocab(TOKENIZER, tweets):
     # Processing
     vocab_index = 1
     for tweet in tweets:
-        text = Tokenize(tweet['text'])
-        text = ''.join([c for c in text if c not in punctuation])
+        text = TOKENIZER(tweet['text'].lower())
+        text = ' '.join([c for c in text if c not in punctuation])
         words = text.split()
         words = [word for word in words if word not in STOPWORDS]
 
@@ -118,7 +111,6 @@ def gen_vocab():
             freq[word] += 1
     vocab['UNK'] = len(vocab) + 1
     reverse_vocab[len(vocab)] = 'UNK'
-    #pdb.set_trace()
 
 
 def filter_vocab(k):
@@ -130,7 +122,7 @@ def filter_vocab(k):
     vocab['UNK'] = len(vocab) + 1
 
 
-def gen_sequence():
+def gen_sequence(TOKENIZER, tweets):
     y_map = {
             'none': 0,
             'racism': 1,
@@ -139,8 +131,8 @@ def gen_sequence():
 
     X, y = [], []
     for tweet in tweets:
-        text = Tokenize(tweet['text'])
-        text = ''.join([c for c in text if c not in punctuation])
+        text = TOKENIZER(tweet['text'].lower())
+        text = ' '.join([c for c in text if c not in punctuation])
         words = text.split()
         words = [word for word in words if word not in STOPWORDS]
         seq, _emb = [], []
@@ -163,7 +155,7 @@ def shuffle_weights(model):
     model.set_weights(weights)
 
 
-def fast_text_model(sequence_length):
+def fast_text_model(sequence_length, EMBEDDING_DIM):
     model = Sequential()
     model.add(Embedding(len(vocab)+1, EMBEDDING_DIM, input_length=sequence_length))
     #model.add(Embedding(len(vocab)+1, EMBEDDING_DIM, input_length=sequence_length, trainable=False))
@@ -174,7 +166,7 @@ def fast_text_model(sequence_length):
     print(model.summary())
     return model
 
-def train_fasttext(X, y, model, inp_dim,embedding_weights, epochs=10, batch_size=128):
+def train_fasttext(X, y, model, inp_dim, embedding_weights, epochs=20, batch_size=128):
     cv_object = KFold(n_splits=10, shuffle=True, random_state=42)
     print(cv_object)
     p, r, f1 = 0., 0., 0.
@@ -184,26 +176,26 @@ def train_fasttext(X, y, model, inp_dim,embedding_weights, epochs=10, batch_size
     for train_index, test_index in cv_object.split(X):
         shuffle_weights(model)
         #pdb.set_trace()
-        #model.layers[0].set_weights([embedding_weights])
+        model.layers[0].set_weights([embedding_weights])
         X_train, y_train = X[train_index], y[train_index]
         X_test, y_test = X[test_index], y[test_index]
         y_train = y_train.reshape((len(y_train), 1))
         X_temp = np.hstack((X_train, y_train))
-        for epoch in xrange(epochs):
+        for epoch in range(epochs):
             for X_batch in batch_gen(X_temp, batch_size):
                 x = X_batch[:, :sentence_len]
                 y_temp = X_batch[:, sentence_len]
-		class_weights = {}
-		class_weights[0] = np.where(y_temp == 0)[0].shape[0]/float(len(y_temp))
-		class_weights[1] = np.where(y_temp == 1)[0].shape[0]/float(len(y_temp))
-		class_weights[2] = np.where(y_temp == 2)[0].shape[0]/float(len(y_temp))
-                try:
-                    y_temp = np_utils.to_categorical(y_temp, nb_classes=3)
-                except Exception as e:
-                    print(e)
-                #print(x.shape, y.shape)
-                loss, acc = model.train_on_batch(x, y_temp)#, class_weight=class_weights)
-                print(loss, acc)
+        class_weights = {}
+        class_weights[0] = np.where(y_temp == 0)[0].shape[0]/float(len(y_temp))
+        class_weights[1] = np.where(y_temp == 1)[0].shape[0]/float(len(y_temp))
+        class_weights[2] = np.where(y_temp == 2)[0].shape[0]/float(len(y_temp))
+        try:
+            y_temp = np_utils.to_categorical(y_temp, num_classes=3)
+        except Exception as e:
+            print(e)
+        #print(x.shape, y.shape)
+        loss, acc = model.train_on_batch(x, y_temp, class_weight=class_weights)
+        print(loss, acc)
         #pdb.set_trace()
         lookup_table += model.layers[0].get_weights()[0]
         y_pred = model.predict_on_batch(X_test)
@@ -231,15 +223,15 @@ def train_fasttext(X, y, model, inp_dim,embedding_weights, epochs=10, batch_size
 
 
 def check_semantic_sim(embedding_table, word):
-    reverse_vocab = {v:k for k,v in vocab.iteritems()}
+    reverse_vocab = {v:k for k,v in vocab.items()}
     sim_word_idx = get_similar_words(embedding_table, embedding_table[vocab[word]], 25)
     sim_words = map(lambda x:reverse_vocab[x[1]], sim_word_idx)
     print(sim_words)
 
-def tryWord(embedding_table):
+
+def tryWord(embedding_table, word):
     while True:
         print("enter word")
-        word = raw_input()
         if word == "pdb":
             pdb.set_trace()
         elif word == 'exit':
@@ -248,23 +240,38 @@ def tryWord(embedding_table):
             check_semantic_sim(embedding_table, word)
 
 
-if __name__ == "__main__":
+def main_fast_text():
 
-    Tweets = select_tweets()
-    tweets = Tweets
-    gen_vocab()
-    X, y = gen_sequence()
+    tweet_data = get_data()
+    for tweet in tweet_data:
+        texts.append(tweet['text'])
+        labels.append(label_map[tweet['label']])
+    print('Found %s texts. (samples)' % len(texts))
+
+    EMBEDDING_DIM = 25
+    GLOVE_MODEL_FILE = "glove.twitter.27B.25d.txt"
+
+    tokenizer = "glove"
+    if tokenizer == "glove":
+        TOKENIZER = glove_tokenize
+    elif tokenizer == "nltk":
+        TOKENIZER = tokenize_nltk.casual.TweetTokenizer(strip_handles=True, reduce_len=True).tokenize
+
+    word2vec_model = gensim.models.KeyedVectors.load_word2vec_format(GLOVE_MODEL_FILE)
+
+    tweets = select_tweets(TOKENIZER, word2vec_model)
+
+    gen_vocab(TOKENIZER, tweets)
+    X, y = gen_sequence(TOKENIZER, tweets)
     MAX_SEQUENCE_LENGTH = max(map(lambda x:len(x), X))
     print("max seq length is %d"%(MAX_SEQUENCE_LENGTH))
     data = pad_sequences(X, maxlen=MAX_SEQUENCE_LENGTH)
     y = np.array(y)
-    W = get_embedding_weights()
+    W = get_embedding_weights(EMBEDDING_DIM, word2vec_model)
     data, y = sklearn.utils.shuffle(data, y)
-    model = fast_text_model(data.shape[1])
+    model = fast_text_model(data.shape[1], EMBEDDING_DIM)
     _ = train_fasttext(data, y, model, EMBEDDING_DIM, W)
     table = model.layers[0].get_weights()[0]
-    #check_semantic_sim(table)
-    tryWord(table)
     pdb.set_trace()
 
 
