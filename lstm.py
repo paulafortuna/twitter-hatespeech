@@ -22,6 +22,10 @@ import sys
 from nltk import tokenize as tokenize_nltk
 from my_tokenizer import glove_tokenize
 
+# for solving a problem with macOS
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
 
 
 ### Preparing the text data
